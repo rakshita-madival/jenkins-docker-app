@@ -7,17 +7,15 @@ pipeline {
     }
 
     stages {
-        // This stage runs on the main agent and saves the files
+        // Stage 1: Prepare Workspace
         stage('Prepare Workspace') {
             steps {
                 echo 'Stashing files for later...'
-                // The code is already checked out by Jenkins automatically
-                // We just need to stash (save) the files we need for the deploy stage
                 stash includes: 'app.js, Dockerfile', name: 'source'
             }
         }
 
-        // Stage 2: Build (not much to do for this simple app)
+        // Stage 2: Build
         stage('Build') {
             steps {
                 echo 'This is the build stage.'
@@ -25,7 +23,7 @@ pipeline {
             }
         }
 
-        // Stage 3: Test (just a placeholder)
+        // Stage 3: Test
         stage('Test') {
             steps {
                 echo 'This is the test stage.'
@@ -34,36 +32,23 @@ pipeline {
             }
         }
 
-        // Stage 4: Deploy
+        // Stage 4: Deploy (running directly on Jenkins container)
         stage('Deploy') {
-            // Use a special, temporary agent just for this stage
-            agent {
-                docker {
-                    image 'docker:latest'
-                    // Mount the host's docker socket so this container can run docker commands
-                    args '-v /var/run/docker.sock:/var/run/docker.sock'
-                }
-            }
+            agent any
             steps {
-                echo "Deploy agent is running. Getting files..."
-                // UNSTASH (load) the files from the 'Prepare' stage
+                echo "Deploying directly on the main Jenkins container..."
                 unstash 'source'
-
-                echo "Files are here. Building Docker image: ${IMAGE_NAME}"
-
-                // Now this command will work, because this agent has 'docker' installed
+                echo "Building Docker image: ${IMAGE_NAME}"
                 sh "docker build -t ${IMAGE_NAME} ."
-
-                echo "Image built. Now running the new container..."
-
+                echo "Stopping old container if exists..."
                 sh 'docker stop my-app || true'
                 sh 'docker rm my-app || true'
+                echo "Running new container..."
                 sh "docker run -d --name my-app -p 3001:3000 ${IMAGE_NAME}"
             }
         }
     }
 
-    // This 'post' block runs after all stages
     post {
         always {
             echo 'Pipeline has finished.'
