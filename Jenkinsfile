@@ -1,19 +1,19 @@
 pipeline {
-    // Run this pipeline on any available Jenkins 'agent' (worker)
-    agent any
+    // Run on the main node by default
+    agent any 
 
     environment {
-        // Define a unique name for our docker image
-        // ${env.BUILD_NUMBER} is a Jenkins variable (like 1, 2, 3...)
         IMAGE_NAME = "my-devops-app:${env.BUILD_NUMBER}"
     }
 
     stages {
-        // Stage 1: Get the code from GitHub
-        stage('Checkout') {
+        // This stage runs on the main agent and saves the files
+        stage('Prepare Workspace') {
             steps {
-                // This command is built-in to Jenkins
-                git url: 'https://github.com/rakshita-madival/jenkins-docker-app.git', branch: 'main'
+                echo 'Stashing files for later...'
+                // The code is already checked out by Jenkins automatically
+                // We just need to stash (save) the files we need for the deploy stage
+                stash includes: 'app.js, Dockerfile', name: 'source'
             }
         }
 
@@ -34,27 +34,30 @@ pipeline {
             }
         }
 
-        // Stage 4: Deploy by building and running the Docker image
+        // Stage 4: Deploy
         stage('Deploy') {
+            // Use a special, temporary agent just for this stage
+            agent {
+                docker {
+                    image 'docker:latest'
+                    // Mount the host's docker socket so this container can run docker commands
+                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
             steps {
-                echo "Building Docker image: ${IMAGE_NAME}"
+                echo "Deploy agent is running. Getting files..."
+                // UNSTASH (load) the files from the 'Prepare' stage
+                unstash 'source'
 
-                // This command runs in the terminal (sh = shell)
-                // It uses the 'Dockerfile' in your repo
+                echo "Files are here. Building Docker image: ${IMAGE_NAME}"
+
+                // Now this command will work, because this agent has 'docker' installed
                 sh "docker build -t ${IMAGE_NAME} ."
 
                 echo "Image built. Now running the new container..."
 
-                // Stop and remove any old container first, if it exists
-                // '|| true' means "don't fail the pipeline if this command fails"
-                // (which it will the first time, since 'my-app' doesn't exist yet)
                 sh 'docker stop my-app || true'
                 sh 'docker rm my-app || true'
-
-                // Run the new Docker image as a container
-                // -d = run in detached (background) mode
-                // --name my-app = give it a simple name
-                // -p 3001:3000 = connect your computer's port 3001 to the container's port 3000
                 sh "docker run -d --name my-app -p 3001:3000 ${IMAGE_NAME}"
             }
         }
