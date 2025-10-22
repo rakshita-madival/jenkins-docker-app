@@ -16,6 +16,7 @@ GitHub – to store the project repository 📂
 Node.js – simple application runtime 🟢
 
 📁 Project Structure
+
 jenkins-docker-app/
 ├── app.js          # Simple Node.js application
 ├── Dockerfile      # Docker instructions for app container
